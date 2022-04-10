@@ -49,7 +49,7 @@ def get_new_findings(old_findings, new_findings):
     return changed_new_findings
 
 
-def privilege_escalation_user_policy_finding_payload(policy_name, user_name, methods, resources):
+def finding_payload_privilege_escalation(policy_name, resource_name, resource_type, methods, resources):
     remediation = {
         'Recommendation': {
             'Text': 'More information can be found here',
@@ -57,9 +57,9 @@ def privilege_escalation_user_policy_finding_payload(policy_name, user_name, met
         }
     }
     return finding_payload(
-        f'cloudsplaining-privilege-escalation-{policy_name}-{user_name}',
+        f'cloudsplaining-privilege-escalation-{policy_name}-{resource_name}',
         'cloudsplaining-privilege-escalation',
-        f'Privilege escalation possible in IAM policy {policy_name} for user {user_name}',
+        f'Privilege escalation possible in IAM policy {policy_name} for {resource_type} {resource_name}',
         'This policy allows a combination of IAM actions that allow a principal with these permissions to escalate their privileges - Privilege Escalation Methods: ' + methods,
         resources,
         remediation
@@ -134,6 +134,8 @@ def combine_privilege_escalation_methods(privilege_escalations):
 
     return ' / '.join(methods)
 
+# User and policy
+
 
 def get_finding_resource_for_user_policy(user_name, user_arn, policy_name):
     return [
@@ -169,11 +171,60 @@ def get_privilege_escalation_finding_for_user_policy(policies, user_policies, us
             logger.info("Found privilege escalation in inline policy with name %s for user %s",
                         policy_name, id)
 
-            finding = privilege_escalation_user_policy_finding_payload(
-                policy_name, user_name,
+            finding = finding_payload_privilege_escalation(
+                policy_name,
+                user_name,
+                "IAM User",
                 combine_privilege_escalation_methods(privilege_escalations),
                 get_finding_resource_for_user_policy(
                     user_name, user_arn, policy_name)
+            )
+
+            logger.debug("Finding: %s", finding)
+            findings.append(finding)
+
+    return findings
+
+
+# Role and Policy
+
+def get_finding_resource_for_role_policy(role_name, role_id, policy_name):
+    return [
+        {
+            'Type': 'AwsIamRole',
+            'RoleId': role_id,
+            'RoleName': role_name,
+            'Region': 'eu-central-1',
+            'RolePolicyList': [
+                {
+                    'PolicyName': policy_name
+                }
+            ]
+        }
+    ]
+
+
+def get_privilege_escalation_finding_for_role_policy(policies, role_policies, role_name, role_id):
+    findings = []
+
+    for policy_id in role_policies:
+        policy = policies[policy_id]
+        policy_name = policy['PolicyName']
+        logger.debug("Policy: %s", policy)
+
+        privilege_escalations = policy['PrivilegeEscalation']
+        if len(privilege_escalations) > 0:
+            logger.info("Found privilege escalation in inline policy with name %s for role %s",
+                        policy_name, id)
+
+            finding = finding_payload_privilege_escalation(
+                policy_name,
+                user_name,
+                "IAM Role",
+                combine_privilege_escalation_methods(privilege_escalations),
+                get_finding_resource_for_role_policy(
+                    role_name, role_id, policy_name
+                )
             )
 
             logger.debug("Finding: %s", finding)
@@ -207,6 +258,7 @@ client = boto3.client('securityhub')
 findings = read_json(cloudsplaining_file)
 
 users = findings['users']
+roles = findings['roles']
 inline_policies = findings['inline_policies']
 customer_managed_policies = findings['customer_managed_policies']
 
@@ -214,8 +266,6 @@ findings = []
 
 logger.info('Iterating through users')
 for id, user in users.items():
-    logger.info("Collecting inline policies for user %s", id)
-
     user_arn = user['arn']
     user_name = user['name']
 
@@ -227,6 +277,21 @@ for id, user in users.items():
     logger.info("Getting customer_managed_plicy findings for user %s", id)
     findings += get_privilege_escalation_finding_for_user_policy(
         customer_managed_policies, user['customer_managed_policies'], user_name, user_arn
+    )
+
+logger.info('Iterating through roles')
+for id, role in roles.items():
+    role_id = role['id']
+    role_name = role['name']
+
+    logger.info("Getting inline_plicy findings for role %s", id)
+    findings += get_privilege_escalation_finding_for_role_policy(
+        inline_policies, role['inline_policies'], role_name, role_id
+    )
+
+    logger.info("Getting customer_managed_plicy findings for role %s", id)
+    findings += get_privilege_escalation_finding_for_role_policy(
+        customer_managed_policies, role['customer_managed_policies'], role_name, role_id
     )
 
 
