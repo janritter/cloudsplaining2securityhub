@@ -9,6 +9,10 @@ from string import Template
 enabled_cloudsplaining_findings = [
     'PrivilegeEscalation',
     'ResourceExposure',
+    'DataExfiltration',
+    'CredentialsExposure',
+    'InfrastructureModification',
+    'ServiceWildcard'
 ]
 
 security_hub_finding_presets = {
@@ -26,12 +30,69 @@ security_hub_finding_presets = {
         }
     },
     'ResourceExposure': {
-        'finding_id': Template('cloudsplaining-resource_exposure-$policy_name-$resource_name'),
+        'finding_id': Template('cloudsplaining-resource-exposure-$policy_name-$resource_name'),
         'generator_id': 'cloudsplaining-resource-exposure',
         'title': Template('Resource exposure possible in IAM policy $policy_name for $resource_type $resource_name'),
         'description': Template('This policy allows actions that permit modification of resource-based policies or can otherwise can expose AWS resources to the public via similar actions that can lead to resource exposure - Actions: $actions'),
         'severity': 'MEDIUM',
-        'remediation': {}
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/resource-exposure/'
+            }
+        }
+    },
+    'DataExfiltration': {
+        'finding_id': Template('cloudsplaining-data-exfiltration-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-data-exfiltration',
+        'title': Template('Data exfiltration possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy contains actions that could allow Data Exfiltration. Data Exfiltration actions allow certain read-only IAM actions without resource constraints - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/data-exfiltration/'
+            }
+        }
+    },
+    'CredentialsExposure': {
+        'finding_id': Template('cloudsplaining-credentils-exposure-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-credentils-exposure',
+        'title': Template('Credential exposure possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy contains actions that could lead to Credentials Exposure. These actions return credentials as part of the API response - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/credentials-exposure/'
+            }
+        }
+    },
+    'InfrastructureModification': {
+        'finding_id': Template('cloudsplaining-infrastructure-modification-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-infrastructure-modification',
+        'title': Template('Infrastructure modification possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy allows "Infrastructure Modification" actions. Infrastructure Modification describes IAM actions with "modify" capabilities, and can therefore lead to Resource Hijacking, unauthorized creation of Infrastructure, Backdoor creation, and/or modification of existing resources which can result in downtime - Actions: $actions'),
+        'severity': 'LOW',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/infrastructure-modification/'
+            }
+        }
+    },
+    'ServiceWildcard': {
+        'finding_id': Template('cloudsplaining-service-wildcard-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-service-wildcard',
+        'title': Template('Service wildcard in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('"Service Wildcard" is an unofficial way of referring to IAM policy statements that grant access to ALL actions under a service - Actions: $actions'),
+        'severity': 'LOW',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/service-wildcard/'
+            }
+        }
     }
 }
 
@@ -213,6 +274,7 @@ def get_finding_resource(resource, policy_name):
             }
         ]
 
+
 def get_all_findings_for_resource(policies, resource_policies, resource):
     findings = []
 
@@ -245,7 +307,7 @@ def get_all_findings_for_resource(policies, resource_policies, resource):
 
 # Logging
 logger = logging.getLogger('cloudsplaining2securityhub')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # console logging
 ch = logging.StreamHandler()
