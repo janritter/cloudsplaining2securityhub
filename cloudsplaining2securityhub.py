@@ -380,7 +380,8 @@ for id, role in roles.items():
         customer_managed_policies, role_policies, resource))
 
 
-response = client.get_findings(
+paginator = client.get_paginator('get_findings')
+response_iterator = paginator.paginate(
     Filters={
         'ProductArn': [
             {
@@ -391,7 +392,11 @@ response = client.get_findings(
     }
 )
 
-old_findings = response['Findings']
+old_findings = []
+for response in response_iterator:
+    old_findings += response['Findings']
+
+logger.debug('Old findings: %s', old_findings)
 
 changed_new_findings = get_new_changed_findings(old_findings, findings)
 
