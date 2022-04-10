@@ -7,7 +7,8 @@ from argparse import ArgumentParser
 from string import Template
 
 enabled_cloudsplaining_findings = [
-    'PrivilegeEscalation'
+    'PrivilegeEscalation',
+    'ResourceExposure',
 ]
 
 security_hub_finding_presets = {
@@ -16,12 +17,21 @@ security_hub_finding_presets = {
         'generator_id': 'cloudsplaining-privilege-escalation',
         'title': Template('Privilege escalation possible in IAM policy $policy_name for $resource_type $resource_name'),
         'description': Template('This policy allows a combination of IAM actions that allow a principal with these permissions to escalate their privileges - Privilege Escalation Methods: $actions'),
+        'severity': 'HIGH',
         'remediation': {
             'Recommendation': {
                 'Text': 'More information can be found here',
                 'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/privilege-escalation/'
             }
         }
+    },
+    'ResourceExposure': {
+        'finding_id': Template('cloudsplaining-resource_exposure-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-resource-exposure',
+        'title': Template('Resource exposure possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy allows actions that permit modification of resource-based policies or can otherwise can expose AWS resources to the public via similar actions that can lead to resource exposure - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {}
     }
 }
 
@@ -69,7 +79,7 @@ def get_new_findings(old_findings, new_findings):
     return changed_new_findings
 
 
-def finding_payload(id, generator_id, title, description, resources, remediation=None):
+def finding_payload(id, generator_id, title, description, resources, severity, remediation=None):
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     hash_payload = {
@@ -83,8 +93,8 @@ def finding_payload(id, generator_id, title, description, resources, remediation
         'Resources': resources,
         'FindingProviderFields': {
             'Severity': {
-                'Label': 'HIGH',
-                'Original': 'HIGH'
+                'Label': severity,
+                'Original': severity,
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
@@ -107,8 +117,8 @@ def finding_payload(id, generator_id, title, description, resources, remediation
         'Resources': resources,
         'FindingProviderFields': {
             'Severity': {
-                'Label': 'HIGH',
-                'Original': 'HIGH'
+                'Label': severity,
+                'Original': severity,
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
@@ -164,11 +174,11 @@ def get_finding_resource(resource, policy_name):
         return [
             {
                 'Type': 'AwsIamRole',
-                'Id': resource['arn'],
+                'Id': resource['id'],
                 'Region': 'eu-central-1',
                 'Details': {
                     'AwsIamRole': {
-                        'RoleId': resource['arn'],
+                        'RoleId': resource['id'],
                         'RoleName': resource['name'],
                         'RolePolicyList': [
                             {
@@ -197,7 +207,7 @@ def finding_payload_cloudsplaining(cloudsplaining_finding_type, actions, policy_
     )
     description = security_hub_finding_presets[cloudsplaining_finding_type]['description'].substitute(
         {
-            'actions': combine_privilege_escalation_methods(actions) if cloudsplaining_finding_type == 'PrivilegeEscalation' else ''
+            'actions': combine_privilege_escalation_methods(actions) if cloudsplaining_finding_type == 'PrivilegeEscalation' else '(' + ', '.join(actions) + ')'
         }
     )
 
@@ -207,7 +217,8 @@ def finding_payload_cloudsplaining(cloudsplaining_finding_type, actions, policy_
         generator_id=security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
         description=description,
         resources=get_finding_resource(resource, policy_name),
-        remediation=security_hub_finding_presets[cloudsplaining_finding_type]['remediation']
+        remediation=security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
+        severity=security_hub_finding_presets[cloudsplaining_finding_type]['severity']
     )
 
 
@@ -296,7 +307,7 @@ for id, user in users.items():
 
 for id, role in roles.items():
     resource = {
-        'arn': role['arn'],
+        'id': role['id'],
         'name': role['name'],
         'type': 'IAMRole'
     }
