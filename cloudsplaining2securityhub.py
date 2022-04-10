@@ -4,21 +4,116 @@ import boto3
 import datetime
 import hashlib
 from argparse import ArgumentParser
+from string import Template
+
+enabled_cloudsplaining_findings = [
+    'PrivilegeEscalation',
+    'ResourceExposure',
+    'DataExfiltration',
+    'CredentialsExposure',
+    'InfrastructureModification',
+    'ServiceWildcard'
+]
+
+security_hub_finding_presets = {
+    'PrivilegeEscalation': {
+        'finding_id': Template('cloudsplaining-privilege-escalation-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-privilege-escalation',
+        'title': Template('Privilege escalation possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy allows a combination of IAM actions that allow a principal with these permissions to escalate their privileges - Privilege Escalation Methods: $actions'),
+        'severity': 'HIGH',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/privilege-escalation/'
+            }
+        }
+    },
+    'ResourceExposure': {
+        'finding_id': Template('cloudsplaining-resource-exposure-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-resource-exposure',
+        'title': Template('Resource exposure possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy allows actions that permit modification of resource-based policies or can otherwise can expose AWS resources to the public via similar actions that can lead to resource exposure - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/resource-exposure/'
+            }
+        }
+    },
+    'DataExfiltration': {
+        'finding_id': Template('cloudsplaining-data-exfiltration-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-data-exfiltration',
+        'title': Template('Data exfiltration possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy contains actions that could allow Data Exfiltration. Data Exfiltration actions allow certain read-only IAM actions without resource constraints - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/data-exfiltration/'
+            }
+        }
+    },
+    'CredentialsExposure': {
+        'finding_id': Template('cloudsplaining-credentils-exposure-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-credentils-exposure',
+        'title': Template('Credential exposure possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy contains actions that could lead to Credentials Exposure. These actions return credentials as part of the API response - Actions: $actions'),
+        'severity': 'MEDIUM',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/credentials-exposure/'
+            }
+        }
+    },
+    'InfrastructureModification': {
+        'finding_id': Template('cloudsplaining-infrastructure-modification-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-infrastructure-modification',
+        'title': Template('Infrastructure modification possible in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('This policy allows "Infrastructure Modification" actions. Infrastructure Modification describes IAM actions with "modify" capabilities, and can therefore lead to Resource Hijacking, unauthorized creation of Infrastructure, Backdoor creation, and/or modification of existing resources which can result in downtime - Actions: $actions'),
+        'severity': 'LOW',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/infrastructure-modification/'
+            }
+        }
+    },
+    'ServiceWildcard': {
+        'finding_id': Template('cloudsplaining-service-wildcard-$policy_name-$resource_name'),
+        'generator_id': 'cloudsplaining-service-wildcard',
+        'title': Template('Service wildcard in IAM policy $policy_name for $resource_type $resource_name'),
+        'description': Template('"Service Wildcard" is an unofficial way of referring to IAM policy statements that grant access to ALL actions under a service - Actions: $actions'),
+        'severity': 'LOW',
+        'remediation': {
+            'Recommendation': {
+                'Text': 'More information can be found here',
+                'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/service-wildcard/'
+            }
+        }
+    }
+}
+
 
 def parse_cli():
-    parser = ArgumentParser(description='Send Cloudsplaining findings to AWS Security Hub')
+    parser = ArgumentParser(
+        description='Send Cloudsplaining findings to AWS Security Hub')
     parser.add_argument("--account-id", required=True,
                         help="ID of the AWS containing AWS Security Hub")
     parser.add_argument("--cloudsplaining-file", required=True,
                         help="Filename of the Cloudsplaining JSON finding file")
     return parser.parse_args()
 
+
 def read_json(file_name):
     logger.debug("Reading JSON file: %s", file_name)
     with open(file_name, 'r') as f:
         return json.load(f)
 
-def get_new_findings(old_findings, new_findings):
+
+def get_new_changed_findings(old_findings, new_findings):
     changed_new_findings = []
 
     for new_finding in new_findings:
@@ -26,57 +121,68 @@ def get_new_findings(old_findings, new_findings):
         for old_finding in old_findings:
             if new_finding['Id'] == old_finding['Id']:
                 found = True
-                logger.debug("Old hash for finding id %s: %s", old_finding['Id'], old_finding['ProductFields']['personal/default/Hash'])
+                logger.debug(
+                    "Old hash for finding id %s: %s",
+                    old_finding['Id'],
+                    old_finding['ProductFields']['personal/default/Hash']
+                )
                 if new_finding['ProductFields']['personal/default/Hash'] != old_finding['ProductFields']['personal/default/Hash']:
-                    logger.info("Finding for id %s changed, new hash: %s", new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
+                    logger.info("Finding for id %s changed, new hash: %s",
+                                new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
                     changed_new_findings.append(new_finding)
                 else:
-                    logger.debug("Finding for id %s unchanged", new_finding['Id'])
+                    logger.info("Finding for id %s unchanged",
+                                new_finding['Id'])
 
                 break
         if not found:
-            logger.info("New finding for id %s, hash: %s", new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
+            logger.info("New finding for id %s, hash: %s",
+                        new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
             changed_new_findings.append(new_finding)
 
     return changed_new_findings
 
-def privilege_escalation_user_inline_policy_finding_payload(inline_policy_name, user_name, methods, resources):
-    remediation = {
-        'Recommendation': {
-            'Text': 'More information can be found here',
-            'Url': 'https://cloudsplaining.readthedocs.io/en/latest/glossary/privilege-escalation/'
+
+def finding_payload(cloudsplaining_finding_type, actions, policy_name, resource):
+    title = security_hub_finding_presets[cloudsplaining_finding_type]['title'].substitute(
+        {
+            'policy_name': policy_name,
+            'resource_name': resource['name'],
+            'resource_type': 'IAM User' if resource['type'] == 'IAMUser' else 'IAM Role'
         }
-    }
-    return finding_payload(
-        f'cloudsplaining-priviledge-escalation-{inline_policy_name}-{user_name}',
-        'cloudsplaining-priviledge-escalation',
-        f'Priviledge escalation possible in IAM inline policy {inline_policy_name} for user {user_name}',
-        'This policy allows a combination of IAM actions that allow a principal with these permissions to escalate their privileges - Privilege Escalation Methods: ' + methods,
-        resources,
-        remediation
+    )
+    finding_id = security_hub_finding_presets[cloudsplaining_finding_type]['finding_id'].substitute(
+        {
+            'policy_name': policy_name,
+            'resource_name': resource['name']
+        }
+    )
+    description = security_hub_finding_presets[cloudsplaining_finding_type]['description'].substitute(
+        {
+            'actions': combine_privilege_escalation_methods(actions) if cloudsplaining_finding_type == 'PrivilegeEscalation' else '(' + ', '.join(actions) + ')'
+        }
     )
 
-
-def finding_payload(id, generator_id, title, description, resources, remediation=None):
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    resource = get_finding_resource(resource, policy_name)
 
     hash_payload = {
         'SchemaVersion': '2018-10-08',
-        'Id': id,
+        'Id': finding_id,
         'ProductArn': f'arn:aws:securityhub:eu-central-1:{aws_account_id}:product/{aws_account_id}/default',
-        'GeneratorId': generator_id,
+        'GeneratorId': security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
         'AwsAccountId': aws_account_id,
         'Title': title,
         'Description': description,
-        'Resources': resources,
+        'Resources': resource,
         'FindingProviderFields': {
             'Severity': {
-                'Label': 'HIGH',
-                'Original': 'HIGH'
+                'Label': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
+                'Original': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
-        'Remediation': remediation,
+        'Remediation': security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
     }
 
     hash = hashlib.sha256(str(hash_payload).encode())
@@ -84,31 +190,124 @@ def finding_payload(id, generator_id, title, description, resources, remediation
 
     return {
         'SchemaVersion': '2018-10-08',
-        'Id': id,
+        'Id': finding_id,
         'ProductArn': f'arn:aws:securityhub:eu-central-1:{aws_account_id}:product/{aws_account_id}/default',
-        'GeneratorId': generator_id,
+        'GeneratorId': security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
         'AwsAccountId': aws_account_id,
         'CreatedAt': timestamp,
         'UpdatedAt': timestamp,
         'Title': title,
         'Description': description,
-        'Resources': resources,
+        'Resources': resource,
         'FindingProviderFields': {
             'Severity': {
-                'Label': 'HIGH',
-                'Original': 'HIGH'
+                'Label': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
+                'Original': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
-        'Remediation': remediation,
+        'Remediation': security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
         'ProductFields': {
             'personal/default/Hash': hash.hexdigest(),
         }
     }
 
+
+def combine_privilege_escalation_methods(privilege_escalations):
+    methods = []
+    for privilege_escalation in privilege_escalations:
+        logger.debug(
+            "Privilege escalation: %s",
+            privilege_escalation
+        )
+
+        privilege_escalation_type = privilege_escalation['type']
+        privilege_escalation_actions = privilege_escalation['actions']
+
+        methods.append(
+            privilege_escalation_type +
+            ' (' + ', '.join(privilege_escalation_actions) + ')'
+        )
+
+    return ' / '.join(methods)
+
+# Generic
+
+
+def get_finding_resource(resource, policy_name):
+    if resource['type'] == 'IAMUser':
+        return [
+            {
+                'Type': 'AwsIamUser',
+                'Id': resource['arn'],
+                'Region': 'eu-central-1',
+                'Details': {
+                    'AwsIamUser': {
+                        'UserId': resource['arn'],
+                        'UserName': resource['name'],
+                        'UserPolicyList': [
+                            {
+                                'PolicyName': policy_name
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    if resource['type'] == "IAMRole":
+        return [
+            {
+                'Type': 'AwsIamRole',
+                'Id': resource['id'],
+                'Region': 'eu-central-1',
+                'Details': {
+                    'AwsIamRole': {
+                        'RoleId': resource['id'],
+                        'RoleName': resource['name'],
+                        'RolePolicyList': [
+                            {
+                                'PolicyName': policy_name
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+
+
+def get_all_findings_for_resource(policies, resource_policies, resource):
+    findings = []
+
+    resource_name = resource['name']
+
+    for policy_id in resource_policies:
+        policy = policies[policy_id]
+        policy_name = policy['PolicyName']
+        logger.debug("Policy with name %s: %s", policy_name, policy)
+
+        for cloudsplaining_finding_type in enabled_cloudsplaining_findings:
+            problems = policy[cloudsplaining_finding_type]
+
+            if len(problems) > 0:
+                logger.info("Found %s in policy with name %s for resource %s",
+                            cloudsplaining_finding_type, policy_name, resource_name)
+
+                finding = finding_payload(
+                    cloudsplaining_finding_type,
+                    problems,
+                    policy_name,
+                    resource
+                )
+
+                logger.debug("Finding: %s", finding)
+                findings.append(finding)
+
+    return findings
+
+
 # Logging
 logger = logging.getLogger('cloudsplaining2securityhub')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 # console logging
 ch = logging.StreamHandler()
@@ -131,6 +330,7 @@ client = boto3.client('securityhub')
 findings = read_json(cloudsplaining_file)
 
 users = findings['users']
+roles = findings['roles']
 inline_policies = findings['inline_policies']
 customer_managed_policies = findings['customer_managed_policies']
 
@@ -138,55 +338,46 @@ findings = []
 
 logger.info('Iterating through users')
 for id, user in users.items():
-    logger.info("Collecting inline policies for user %s", id)
+    resource = {
+        'arn': user['arn'],
+        'name':  user['name'],
+        'type': 'IAMUser'
+    }
 
-    user_arn = user['arn']
-    user_name = user['name']
+    user_policies = user['inline_policies']
+    logger.debug("User inline_policies: %s", user_policies)
 
-    for inline_policy_id in user['inline_policies']:
-        inline_policy = inline_policies[inline_policy_id]
-        inline_policy_name = inline_policy['PolicyName']
-        logger.debug("Inline policy: %s", inline_policy)
+    logger.info("Checking inline_policy for user %s", id)
+    findings.extend(get_all_findings_for_resource(
+        inline_policies, user_policies, resource))
 
-        privilege_escalations = inline_policy['PrivilegeEscalation']
-        if len(privilege_escalations) > 0:
-            logger.info("Found privilege escalation inline policy with name %s for user %s",
-                        inline_policy_name, id)
-            methods = ""
-            for privilege_escalation in privilege_escalations:
-                logger.info("Found privilege escalation: %s",
-                            privilege_escalation)
+    user_policies = user['customer_managed_policies']
+    logger.debug("User customer_managed_policies: %s", user_policies)
 
-                privilege_escalation_type = privilege_escalation['type']
-                privilege_escalation_actions = privilege_escalation['actions']
+    logger.info("Checking customer_managed_policy for user %s", id)
+    findings.extend(get_all_findings_for_resource(
+        customer_managed_policies, user_policies, resource))
 
-                if methods != "":
-                    methods += "/ "
-                methods += privilege_escalation_type + \
-                    ' (' + ', '.join(privilege_escalation_actions) + ') '
+for id, role in roles.items():
+    resource = {
+        'id': role['id'],
+        'name': role['name'],
+        'type': 'IAMRole'
+    }
 
-            finding = privilege_escalation_user_inline_policy_finding_payload(inline_policy_name, user_name, methods, [
-                {
-                    'Type': 'AwsIamUser',
-                    'Id': user_arn,
-                    'Region': 'eu-central-1',
-                    'Details': {
-                        'AwsIamUser': {
-                            'UserId': user_arn,
-                            'UserName': user_name,
-                            'UserPolicyList': [
-                                {
-                                    'PolicyName': inline_policy_name
-                                }
-                            ]
-                        }
-                    }
-                }
-            ])
+    role_policies = role['inline_policies']
+    logger.debug("Role inline_policies: %s", role_policies)
 
-            logger.debug("Finding: %s", finding)
+    logger.info("Checking inline_policy for role %s", id)
+    findings.extend(get_all_findings_for_resource(
+        inline_policies, role_policies, resource))
 
-            findings.append(finding)
+    role_policies = role['customer_managed_policies']
+    logger.debug("Role customer_managed_policies: %s", role_policies)
+
+    logger.info("Checking customer_managed_policy for role %s", id)
+    findings.extend(get_all_findings_for_resource(
+        customer_managed_policies, role_policies, resource))
 
 
 response = client.get_findings(
@@ -202,7 +393,7 @@ response = client.get_findings(
 
 old_findings = response['Findings']
 
-changed_new_findings = get_new_findings(old_findings, findings)
+changed_new_findings = get_new_changed_findings(old_findings, findings)
 
 if len(changed_new_findings) > 0:
     logger.info("Found %s new / changed findings", len(changed_new_findings))
