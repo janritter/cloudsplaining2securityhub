@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/janritter/cloudsplaining2securityhub/compare/0.2.0...0.2.1) (2022-04-10)
+
+
+### Bug Fixes
+
+* use pagination to get all old findings ([2774338](https://github.com/janritter/cloudsplaining2securityhub/commit/27743387f4c6c853a57793b5aa2ce88f98367eff))
+
 # [0.2.0](https://github.com/janritter/cloudsplaining2securityhub/compare/0.1.0...0.2.0) (2022-04-10)
 
 
