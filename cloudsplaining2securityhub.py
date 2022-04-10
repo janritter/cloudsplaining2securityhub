@@ -135,6 +135,27 @@ def combine_privilege_escalation_methods(privilege_escalations):
     return ' / '.join(methods)
 
 
+def get_finding_resource_for_user_policy(user_name, user_arn, policy_name):
+    return [
+        {
+            'Type': 'AwsIamUser',
+            'Id': user_arn,
+            'Region': 'eu-central-1',
+            'Details': {
+                'AwsIamUser': {
+                    'UserId': user_arn,
+                    'UserName': user_name,
+                    'UserPolicyList': [
+                        {
+                            'PolicyName': policy_name
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+
+
 # Logging
 logger = logging.getLogger('cloudsplaining2securityhub')
 logger.setLevel(logging.DEBUG)
@@ -179,30 +200,34 @@ for id, user in users.items():
 
         privilege_escalations = inline_policy['PrivilegeEscalation']
         if len(privilege_escalations) > 0:
-            logger.info("Found privilege escalation inline policy with name %s for user %s",
+            logger.info("Found privilege escalation in inline policy with name %s for user %s",
                         inline_policy_name, id)
 
             finding = privilege_escalation_user_inline_policy_finding_payload(
                 inline_policy_name, user_name,
                 combine_privilege_escalation_methods(privilege_escalations),
-                [
-                    {
-                        'Type': 'AwsIamUser',
-                        'Id': user_arn,
-                        'Region': 'eu-central-1',
-                        'Details': {
-                            'AwsIamUser': {
-                                'UserId': user_arn,
-                                'UserName': user_name,
-                                'UserPolicyList': [
-                                    {
-                                        'PolicyName': inline_policy_name
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                ]
+                get_finding_resource_for_user_policy(user_name, user_arn, inline_policy_name)
+            )
+
+            logger.debug("Finding: %s", finding)
+
+            findings.append(finding)
+
+    for customer_managed_policy_id in user['customer_managed_policies']:
+        customer_managed_policy = customer_managed_policies[customer_managed_policy_id]
+        customer_managed_policy_name = customer_managed_policy['PolicyName']
+        logger.debug("Customer managed policy: %s", customer_managed_policy)
+
+        privilege_escalations = customer_managed_policy['PrivilegeEscalation']
+        if len(privilege_escalations) > 0:
+            logger.info("Found privilege escalation in customer managed policy with name %s for user %s",
+                        customer_managed_policy_name, id)
+
+            finding = privilege_escalation_user_inline_policy_finding_payload(
+                customer_managed_policy_name,
+                user_name,
+                combine_privilege_escalation_methods(privilege_escalations),
+                get_finding_resource_for_user_policy(user_name, user_arn, customer_managed_policy_name)
             )
 
             logger.debug("Finding: %s", finding)
