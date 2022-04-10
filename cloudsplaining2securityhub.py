@@ -5,18 +5,22 @@ import datetime
 import hashlib
 from argparse import ArgumentParser
 
+
 def parse_cli():
-    parser = ArgumentParser(description='Send Cloudsplaining findings to AWS Security Hub')
+    parser = ArgumentParser(
+        description='Send Cloudsplaining findings to AWS Security Hub')
     parser.add_argument("--account-id", required=True,
                         help="ID of the AWS containing AWS Security Hub")
     parser.add_argument("--cloudsplaining-file", required=True,
                         help="Filename of the Cloudsplaining JSON finding file")
     return parser.parse_args()
 
+
 def read_json(file_name):
     logger.debug("Reading JSON file: %s", file_name)
     with open(file_name, 'r') as f:
         return json.load(f)
+
 
 def get_new_findings(old_findings, new_findings):
     changed_new_findings = []
@@ -26,19 +30,24 @@ def get_new_findings(old_findings, new_findings):
         for old_finding in old_findings:
             if new_finding['Id'] == old_finding['Id']:
                 found = True
-                logger.debug("Old hash for finding id %s: %s", old_finding['Id'], old_finding['ProductFields']['personal/default/Hash'])
+                logger.debug("Old hash for finding id %s: %s",
+                             old_finding['Id'], old_finding['ProductFields']['personal/default/Hash'])
                 if new_finding['ProductFields']['personal/default/Hash'] != old_finding['ProductFields']['personal/default/Hash']:
-                    logger.info("Finding for id %s changed, new hash: %s", new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
+                    logger.info("Finding for id %s changed, new hash: %s",
+                                new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
                     changed_new_findings.append(new_finding)
                 else:
-                    logger.debug("Finding for id %s unchanged", new_finding['Id'])
+                    logger.info("Finding for id %s unchanged",
+                                new_finding['Id'])
 
                 break
         if not found:
-            logger.info("New finding for id %s, hash: %s", new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
+            logger.info("New finding for id %s, hash: %s",
+                        new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
             changed_new_findings.append(new_finding)
 
     return changed_new_findings
+
 
 def privilege_escalation_user_inline_policy_finding_payload(inline_policy_name, user_name, methods, resources):
     remediation = {
@@ -106,6 +115,26 @@ def finding_payload(id, generator_id, title, description, resources, remediation
         }
     }
 
+
+def combine_privilege_escalation_methods(privilege_escalations):
+    methods = []
+    for privilege_escalation in privilege_escalations:
+        logger.debug(
+            "Privilege escalation: %s",
+            privilege_escalation
+        )
+
+        privilege_escalation_type = privilege_escalation['type']
+        privilege_escalation_actions = privilege_escalation['actions']
+
+        methods.append(
+            privilege_escalation_type +
+            ' (' + ', '.join(privilege_escalation_actions) + ')'
+        )
+
+    return ' / '.join(methods)
+
+
 # Logging
 logger = logging.getLogger('cloudsplaining2securityhub')
 logger.setLevel(logging.DEBUG)
@@ -152,37 +181,29 @@ for id, user in users.items():
         if len(privilege_escalations) > 0:
             logger.info("Found privilege escalation inline policy with name %s for user %s",
                         inline_policy_name, id)
-            methods = ""
-            for privilege_escalation in privilege_escalations:
-                logger.info("Found privilege escalation: %s",
-                            privilege_escalation)
 
-                privilege_escalation_type = privilege_escalation['type']
-                privilege_escalation_actions = privilege_escalation['actions']
-
-                if methods != "":
-                    methods += "/ "
-                methods += privilege_escalation_type + \
-                    ' (' + ', '.join(privilege_escalation_actions) + ') '
-
-            finding = privilege_escalation_user_inline_policy_finding_payload(inline_policy_name, user_name, methods, [
-                {
-                    'Type': 'AwsIamUser',
-                    'Id': user_arn,
-                    'Region': 'eu-central-1',
-                    'Details': {
-                        'AwsIamUser': {
-                            'UserId': user_arn,
-                            'UserName': user_name,
-                            'UserPolicyList': [
-                                {
-                                    'PolicyName': inline_policy_name
-                                }
-                            ]
+            finding = privilege_escalation_user_inline_policy_finding_payload(
+                inline_policy_name, user_name,
+                combine_privilege_escalation_methods(privilege_escalations),
+                [
+                    {
+                        'Type': 'AwsIamUser',
+                        'Id': user_arn,
+                        'Region': 'eu-central-1',
+                        'Details': {
+                            'AwsIamUser': {
+                                'UserId': user_arn,
+                                'UserName': user_name,
+                                'UserPolicyList': [
+                                    {
+                                        'PolicyName': inline_policy_name
+                                    }
+                                ]
+                            }
                         }
                     }
-                }
-            ])
+                ]
+            )
 
             logger.debug("Finding: %s", finding)
 
