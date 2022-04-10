@@ -1,0 +1,16 @@
+version: 2.1
+
+orbs:
+  semantic-release: trustedshops-public/semantic-release@1.2.0
+
+workflows:
+  version: 2
+  continious:
+    jobs:
+      - semantic-release/with-changelog-github-config:
+          name: semantic-release
+          context:
+            - semantic-release
+          filters:
+            branches:
+              only: [main]
