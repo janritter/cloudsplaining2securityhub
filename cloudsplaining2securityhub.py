@@ -52,7 +52,7 @@ def read_json(file_name):
         return json.load(f)
 
 
-def get_new_findings(old_findings, new_findings):
+def get_new_changed_findings(old_findings, new_findings):
     changed_new_findings = []
 
     for new_finding in new_findings:
@@ -60,8 +60,11 @@ def get_new_findings(old_findings, new_findings):
         for old_finding in old_findings:
             if new_finding['Id'] == old_finding['Id']:
                 found = True
-                logger.debug("Old hash for finding id %s: %s",
-                             old_finding['Id'], old_finding['ProductFields']['personal/default/Hash'])
+                logger.debug(
+                    "Old hash for finding id %s: %s",
+                    old_finding['Id'],
+                    old_finding['ProductFields']['personal/default/Hash']
+                )
                 if new_finding['ProductFields']['personal/default/Hash'] != old_finding['ProductFields']['personal/default/Hash']:
                     logger.info("Finding for id %s changed, new hash: %s",
                                 new_finding['Id'], new_finding['ProductFields']['personal/default/Hash'])
@@ -79,26 +82,46 @@ def get_new_findings(old_findings, new_findings):
     return changed_new_findings
 
 
-def finding_payload(id, generator_id, title, description, resources, severity, remediation=None):
+def finding_payload(cloudsplaining_finding_type, actions, policy_name, resource):
+    title = security_hub_finding_presets[cloudsplaining_finding_type]['title'].substitute(
+        {
+            'policy_name': policy_name,
+            'resource_name': resource['name'],
+            'resource_type': 'IAM User' if resource['type'] == 'IAMUser' else 'IAM Role'
+        }
+    )
+    finding_id = security_hub_finding_presets[cloudsplaining_finding_type]['finding_id'].substitute(
+        {
+            'policy_name': policy_name,
+            'resource_name': resource['name']
+        }
+    )
+    description = security_hub_finding_presets[cloudsplaining_finding_type]['description'].substitute(
+        {
+            'actions': combine_privilege_escalation_methods(actions) if cloudsplaining_finding_type == 'PrivilegeEscalation' else '(' + ', '.join(actions) + ')'
+        }
+    )
+
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    resource = get_finding_resource(resource, policy_name)
 
     hash_payload = {
         'SchemaVersion': '2018-10-08',
-        'Id': id,
+        'Id': finding_id,
         'ProductArn': f'arn:aws:securityhub:eu-central-1:{aws_account_id}:product/{aws_account_id}/default',
-        'GeneratorId': generator_id,
+        'GeneratorId': security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
         'AwsAccountId': aws_account_id,
         'Title': title,
         'Description': description,
-        'Resources': resources,
+        'Resources': resource,
         'FindingProviderFields': {
             'Severity': {
-                'Label': severity,
-                'Original': severity,
+                'Label': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
+                'Original': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
-        'Remediation': remediation,
+        'Remediation': security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
     }
 
     hash = hashlib.sha256(str(hash_payload).encode())
@@ -106,23 +129,23 @@ def finding_payload(id, generator_id, title, description, resources, severity, r
 
     return {
         'SchemaVersion': '2018-10-08',
-        'Id': id,
+        'Id': finding_id,
         'ProductArn': f'arn:aws:securityhub:eu-central-1:{aws_account_id}:product/{aws_account_id}/default',
-        'GeneratorId': generator_id,
+        'GeneratorId': security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
         'AwsAccountId': aws_account_id,
         'CreatedAt': timestamp,
         'UpdatedAt': timestamp,
         'Title': title,
         'Description': description,
-        'Resources': resources,
+        'Resources': resource,
         'FindingProviderFields': {
             'Severity': {
-                'Label': severity,
-                'Original': severity,
+                'Label': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
+                'Original': security_hub_finding_presets[cloudsplaining_finding_type]['severity'],
             },
             'Types': ['Software and Configuration Checks/Vulnerabilities/CVE']
         },
-        'Remediation': remediation,
+        'Remediation': security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
         'ProductFields': {
             'personal/default/Hash': hash.hexdigest(),
         }
@@ -190,38 +213,6 @@ def get_finding_resource(resource, policy_name):
             }
         ]
 
-
-def finding_payload_cloudsplaining(cloudsplaining_finding_type, actions, policy_name, resource):
-    title = security_hub_finding_presets[cloudsplaining_finding_type]['title'].substitute(
-        {
-            'policy_name': policy_name,
-            'resource_name': resource['name'],
-            'resource_type': 'IAM User' if resource['type'] == 'IAMUser' else 'IAM Role'
-        }
-    )
-    finding_id = security_hub_finding_presets[cloudsplaining_finding_type]['finding_id'].substitute(
-        {
-            'policy_name': policy_name,
-            'resource_name': resource['name']
-        }
-    )
-    description = security_hub_finding_presets[cloudsplaining_finding_type]['description'].substitute(
-        {
-            'actions': combine_privilege_escalation_methods(actions) if cloudsplaining_finding_type == 'PrivilegeEscalation' else '(' + ', '.join(actions) + ')'
-        }
-    )
-
-    return finding_payload(
-        title=title,
-        id=finding_id,
-        generator_id=security_hub_finding_presets[cloudsplaining_finding_type]['generator_id'],
-        description=description,
-        resources=get_finding_resource(resource, policy_name),
-        remediation=security_hub_finding_presets[cloudsplaining_finding_type]['remediation'],
-        severity=security_hub_finding_presets[cloudsplaining_finding_type]['severity']
-    )
-
-
 def get_all_findings_for_resource(policies, resource_policies, resource):
     findings = []
 
@@ -239,7 +230,7 @@ def get_all_findings_for_resource(policies, resource_policies, resource):
                 logger.info("Found %s in policy with name %s for resource %s",
                             cloudsplaining_finding_type, policy_name, resource_name)
 
-                finding = finding_payload_cloudsplaining(
+                finding = finding_payload(
                     cloudsplaining_finding_type,
                     problems,
                     policy_name,
@@ -340,7 +331,7 @@ response = client.get_findings(
 
 old_findings = response['Findings']
 
-changed_new_findings = get_new_findings(old_findings, findings)
+changed_new_findings = get_new_changed_findings(old_findings, findings)
 
 if len(changed_new_findings) > 0:
     logger.info("Found %s new / changed findings", len(changed_new_findings))
