@@ -10,7 +10,7 @@ workflows:
       - semantic-release/with-changelog-github-config:
           name: semantic-release
           context:
-            - semantic-release
+            - github-release
           filters:
             branches:
               only: [main]
