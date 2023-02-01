@@ -7,7 +7,7 @@ workflows:
   version: 2
   continious:
     jobs:
-      - semantic-release/with-changelog-github-config:
+      - semantic-release/with-existing-config:
           name: semantic-release
           context:
             - github-release
