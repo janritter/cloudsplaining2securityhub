@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/janritter/cloudsplaining2securityhub/compare/0.3.0...0.3.1) (2023-03-07)
+
+
+### Bug Fixes
+
+* **deps:** update semantic-release orb to v4 ([11741b5](https://github.com/janritter/cloudsplaining2securityhub/commit/11741b509a9d9629d8ca6580845ba8803bd60d88))
+
 ## [0.3.0](https://github.com/janritter/cloudsplaining2securityhub/compare/0.2.2...0.3.0) (2023-02-01)
 
 
