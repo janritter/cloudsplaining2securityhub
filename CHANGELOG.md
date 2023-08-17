@@ -1,3 +1,10 @@
+## [0.3.2](https://github.com/janritter/cloudsplaining2securityhub/compare/0.3.1...0.3.2) (2023-08-17)
+
+
+### Bug Fixes
+
+* **deps:** update minor packages ([0cda872](https://github.com/janritter/cloudsplaining2securityhub/commit/0cda8726636cf1622b3aa9af7cd2c2bc7fb7b76f))
+
 ## [0.3.1](https://github.com/janritter/cloudsplaining2securityhub/compare/0.3.0...0.3.1) (2023-03-07)
 
 
