@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cloudsplaining2securityhub"
-version = "0.3.2"
+version = "0.3.3"
 description = "Tool to send Cloudsplaining findings to AWS Security Hub"
 authors = ["Jan Ritter <me@janri.de>"]
 license = "GPL-3.0 license"
