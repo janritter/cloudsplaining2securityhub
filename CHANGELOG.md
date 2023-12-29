@@ -1,3 +1,11 @@
+## [0.3.5](https://github.com/janritter/cloudsplaining2securityhub/compare/0.3.4...0.3.5) (2023-12-29)
+
+
+### Bug Fixes
+
+* **deps:** update dependency boto3 to v1.34.10 ([46c2b96](https://github.com/janritter/cloudsplaining2securityhub/commit/46c2b9695ebf47f43b50f0169e040374909827d2))
+* **deps:** update semantic-release orb to v6 ([24c4767](https://github.com/janritter/cloudsplaining2securityhub/commit/24c47670150454e6bf24df18a9e2fcfa16de930c))
+
 ## [0.3.4](https://github.com/janritter/cloudsplaining2securityhub/compare/0.3.3...0.3.4) (2023-10-20)
 
 
